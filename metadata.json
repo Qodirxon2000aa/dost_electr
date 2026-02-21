@@ -1,0 +1,10 @@
+
+{
+  "name": "DOST ELECTRIC",
+  "description": "Professional Electrical Enterprise Management System with automated payroll and attendance tracking.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
