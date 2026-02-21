@@ -1,4 +1,4 @@
-const BASE_URL = process.env.REACT_APP_API_URL || 'https://dost-api.vercel.app/api';
+const BASE_URL = process.env.REACT_APP_API_URL || 'https://dost-api2.vercel.app/api';
 
 const request = async (method, path, body = null) => {
   const options = {
