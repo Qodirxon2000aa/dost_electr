@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Edit2, Trash2, X, UserPlus, Banknote, CheckCircle, Clock } from 'lucide-react';
+import { Search, Edit2, Trash2, X, UserPlus, Banknote, CheckCircle, Clock, Eye, EyeOff } from 'lucide-react';
 import { api } from '../utils/api';
 
 const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
@@ -10,6 +10,8 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
   const [showQuickPay, setShowQuickPay]   = useState(null);
   const [quickAmount, setQuickAmount]     = useState('');
   const [editEmp, setEditEmp]             = useState(null);
+  const [editNewPass, setEditNewPass]     = useState('');   // yangi parol maydoni
+  const [showPass, setShowPass]           = useState(false); // ko'rish/yashirish
 
   const [newEmp, setNewEmp] = useState({
     name: '', email: '', password: '', position: '',
@@ -53,17 +55,24 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
     setLoading(true);
     const id = editEmp._id || editEmp.id;
     try {
-      await api.updateEmployee(id, {
+      const updateData = {
         name:       editEmp.name,
         position:   editEmp.position,
         email:      editEmp.email,
         salaryType: editEmp.salaryType,
         salaryRate: Number(editEmp.salaryRate),
         currency:   editEmp.currency || 'UZS',
-      });
+      };
+      // Yangi parol kiritilgan bo'lsa qo'shiladi
+      if (editNewPass.trim()) {
+        updateData.password = editNewPass.trim();
+      }
+      await api.updateEmployee(id, updateData);
       onLog(`Xodim yangilandi: ${editEmp.name}`);
       setShowEditModal(false);
       setEditEmp(null);
+      setEditNewPass('');
+      setShowPass(false);
       onRefresh();
     } catch (err) {
       alert('Xatolik: ' + err.message);
@@ -111,6 +120,13 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openEdit = (emp) => {
+    setEditEmp({ ...emp });
+    setEditNewPass('');
+    setShowPass(false);
+    setShowEditModal(true);
   };
 
   const filteredEmployees = employees.filter(emp =>
@@ -194,7 +210,6 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
               className="bg-slate-950 border border-slate-800 p-4 rounded-2xl hover:border-yellow-500/30 transition-all"
             >
               <div className="flex items-center justify-between mb-3">
-                {/* Xodim info — bosilsa quick pay */}
                 <div
                   onClick={() => setShowQuickPay(emp)}
                   className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
@@ -207,10 +222,9 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
                     <p className="text-slate-500 text-[9px] font-bold uppercase tracking-wider truncate">{emp.position}</p>
                   </div>
                 </div>
-                {/* Amallar */}
                 <div className="flex gap-1 shrink-0 ml-2">
                   <button
-                    onClick={() => { setEditEmp({ ...emp }); setShowEditModal(true); }}
+                    onClick={() => openEdit(emp)}
                     className="p-2 text-slate-600 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all"
                   >
                     <Edit2 size={15} />
@@ -224,15 +238,25 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
                 </div>
               </div>
 
-              {/* Stavka */}
-              <div className="bg-slate-900/60 rounded-xl px-3 py-2 flex justify-between items-center border border-slate-800/50">
-                <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
-                  {emp.salaryType === 'DAILY' ? 'Kunlik' : 'Oylik'}
-                </span>
-                <span className="text-white font-black text-sm">
-                  {(emp.salaryRate || 0).toLocaleString()}
-                  <span className="text-yellow-500 text-[10px] ml-1">{emp.currency}</span>
-                </span>
+              {/* Login + stavka */}
+              <div className="space-y-1.5">
+                <div className="bg-slate-900/60 rounded-xl px-3 py-2 flex justify-between items-center border border-slate-800/50">
+                  <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Login</span>
+                  <span className="text-slate-300 font-black text-xs">{emp.email || '—'}</span>
+                </div>
+                <div className="bg-slate-900/60 rounded-xl px-3 py-2 flex justify-between items-center border border-slate-800/50">
+                  <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Parol</span>
+                  <span className="text-slate-300 font-black text-xs font-mono">{emp.password || '—'}</span>
+                </div>
+                <div className="bg-slate-900/60 rounded-xl px-3 py-2 flex justify-between items-center border border-slate-800/50">
+                  <span className="text-slate-500 text-[9px] font-black uppercase tracking-widest">
+                    {emp.salaryType === 'DAILY' ? 'Kunlik' : 'Oylik'}
+                  </span>
+                  <span className="text-white font-black text-sm">
+                    {(emp.salaryRate || 0).toLocaleString()}
+                    <span className="text-yellow-500 text-[10px] ml-1">{emp.currency}</span>
+                  </span>
+                </div>
               </div>
             </div>
           );
@@ -251,7 +275,7 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
           <div className="bg-slate-900 border border-emerald-500/20 rounded-t-[2rem] sm:rounded-[2rem] w-full sm:max-w-md p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-5">
               <div>
-                <h3 className="text-lg font-black text-white italic">Avans Berish💵</h3>
+                <h3 className="text-lg font-black text-white italic">Avans Berish 💵</h3>
                 <p className="text-slate-500 text-[9px] font-black uppercase mt-0.5">{showQuickPay.name}</p>
               </div>
               <button
@@ -322,7 +346,7 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
               />
               <input
                 required
-                type="password"
+                type="text"
                 className="w-full px-4 py-3.5 bg-slate-950 border border-slate-800 focus:border-yellow-500 rounded-xl text-white font-bold text-sm outline-none transition-all placeholder:text-slate-700"
                 placeholder="Parol"
                 value={newEmp.password}
@@ -342,7 +366,7 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
                   onChange={e => setNewEmp({ ...newEmp, salaryType: e.target.value })}
                 >
                   <option value="DAILY">Kunlik</option>
-                  {/* <option value="MONTHLY">Oylik</option> */}
+                  <option value="MONTHLY">Oylik</option>
                 </select>
               </div>
               <div className="pt-2 space-y-2">
@@ -373,7 +397,7 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
             <div className="flex justify-between items-center mb-5">
               <h2 className="text-white font-black text-lg italic">TAHRIRLASH</h2>
               <button
-                onClick={() => { setShowEditModal(false); setEditEmp(null); }}
+                onClick={() => { setShowEditModal(false); setEditEmp(null); setEditNewPass(''); setShowPass(false); }}
                 className="w-9 h-9 bg-slate-800 hover:bg-slate-700 rounded-xl flex items-center justify-center"
               >
                 <X className="text-slate-400" size={16} />
@@ -402,6 +426,45 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
                 value={editEmp.email}
                 onChange={e => setEditEmp({ ...editEmp, email: e.target.value })}
               />
+
+              {/* ── JORIY PAROL (ko'rinib turadi) ── */}
+              <div className="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 flex justify-between items-center">
+                <div>
+                  <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest mb-0.5">
+                    Joriy parol
+                  </p>
+                  <p className="text-white font-black text-sm font-mono">
+                    {editEmp.password || '—'}
+                  </p>
+                </div>
+                <span className="text-[8px] text-slate-600 font-bold uppercase bg-slate-800 px-2 py-1 rounded-lg">
+                  Hozirgi
+                </span>
+              </div>
+
+              {/* ── YANGI PAROL (ixtiyoriy) ── */}
+              <div className="relative">
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  className="w-full px-4 py-3.5 pr-12 bg-slate-950 border border-slate-800 focus:border-blue-500 rounded-xl text-white font-bold text-sm outline-none transition-all placeholder:text-slate-600"
+                  placeholder="Yangi parol (ixtiyoriy)"
+                  value={editNewPass}
+                  onChange={e => setEditNewPass(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(v => !v)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                >
+                  {showPass ? <EyeOff size={16}/> : <Eye size={16}/>}
+                </button>
+              </div>
+              {editNewPass && (
+                <p className="text-[9px] text-blue-400 font-bold px-1">
+                  ✓ Yangi parol saqlanganda o'zgartiriladi
+                </p>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <input
                   inputMode="numeric"
@@ -420,6 +483,7 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
                   <option value="MONTHLY">Oylik</option>
                 </select>
               </div>
+
               <div className="pt-2 space-y-2">
                 <button
                   type="submit"
@@ -430,7 +494,7 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowEditModal(false); setEditEmp(null); }}
+                  onClick={() => { setShowEditModal(false); setEditEmp(null); setEditNewPass(''); setShowPass(false); }}
                   className="w-full py-3 text-slate-500 hover:text-white font-bold text-sm transition-colors"
                 >
                   Bekor qilish

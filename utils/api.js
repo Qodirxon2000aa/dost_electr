@@ -1,4 +1,4 @@
-const BASE_URL = process.env.REACT_APP_API_URL || 'https://nodirkhanov.uz/api';
+const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const request = async (method, path, body = null) => {
   const options = {
