@@ -399,19 +399,25 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
               </select>
             </div>
 
-            {/* Sana */}
-            <div>
-              <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">
-                Sana
-              </label>
-              <input
-                type="date"
-                value={manualDate}
-                max={new Date().toISOString().split('T')[0]}
-                onChange={e => { setManualDate(e.target.value); setManualMsg(null); }}
-                className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white px-4 py-3 rounded-xl font-bold text-sm outline-none transition-all"
-              />
-            </div>
+           {/* Sana */}
+<div>
+  <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">
+    Sana
+  </label>
+  <input
+    type="date"
+    value={manualDate}
+    // max olib tashlandi → endi kelajak sanani ham tanlash mumkin
+    onChange={e => {
+      setManualDate(e.target.value);
+      setManualMsg(null);
+    }}
+    className="w-full bg-slate-900 border border-slate-700 
+               focus:border-slate-500 focus:ring-0
+               text-white px-4 py-3 rounded-xl 
+               font-bold text-sm outline-none transition-colors"
+  />
+</div>
 
             {/* Tanlangan xodimning o'sha kundagi holati */}
             {manualExistingAtt && (
