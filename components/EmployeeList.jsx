@@ -75,7 +75,7 @@ const EmployeeList = ({ employees, payroll, onAdd, onLog, onRefresh }) => {
       setShowPass(false);
       onRefresh();
     } catch (err) {
-      alert('Yangilandi:');
+      alert('Xatolik: ' + err.message);
     } finally {
       setLoading(false);
     }

@@ -1,26 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, CalendarCheck, CreditCard,
-  LogOut, Menu, X, Zap, Building2, ShieldCheck, FileSpreadsheet
+  LayoutDashboard, Users, CreditCard,
+  LogOut, Menu, X, Zap, Building2, ShieldCheck,
 } from 'lucide-react';
 
 import { api } from './utils/api';
 
-import Dashboard       from './components/Dashboard';
-import EmployeeList    from './components/EmployeeList';
-import Attendance      from './components/Attendance';
-import Payroll         from './components/Payroll';
-import Login           from './components/Login';
-import EmployeePortal  from './components/EmployeePortal';
-import ObjectsManager  from './components/ObjectManager';
-import Excel           from './components/Exel';
+import Dashboard      from './components/Dashboard';
+import EmployeeList   from './components/EmployeeList';
+import Attendance     from './components/Attendance';
+import Payroll        from './components/Payroll';
+import Login          from './components/Login';
+import EmployeePortal from './components/EmployeePortal';
+import ObjectsManager from './components/ObjectManager';
+import Excel          from './components/Exel';
 
 const App = () => {
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('currentUser');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('currentUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOnline, setIsOnline]           = useState(navigator.onLine);
 
@@ -79,19 +84,39 @@ const App = () => {
     localStorage.removeItem('currentUser');
   };
 
-  const addLog = async (action) => {
-    try {
-      await api.createLog(action, currentUser?.name || 'Sistema');
-      setLogs(prev => [{
-        _id:       Date.now().toString(),
-        action,
-        performer: currentUser?.name || 'Sistema',
-        createdAt: new Date().toISOString(),
-      }, ...prev].slice(0, 50));
-    } catch (e) {
-      console.error('Log xatosi:', e);
+  // ── LOG QO'SHISH (to'liq himoyalangan) ──────────────────────────────────
+  const addLog = useCallback(async (action) => {
+    // 1. action bo'sh yoki undefined bo'lsa — yubormaymiz
+    const cleanAction = action ? String(action).trim() : '';
+    if (!cleanAction) {
+      console.warn('addLog: action bo\'sh, log yuborilmadi');
+      return;
     }
-  };
+
+    // 2. Performer
+    const performer = currentUser?.name
+      ? String(currentUser.name).trim()
+      : 'Sistema';
+
+    // 3. Optimistik UI yangilash (API dan oldin)
+    const tempLog = {
+      _id:       `temp_${Date.now()}`,
+      action:    cleanAction,
+      performer,
+      createdAt: new Date().toISOString(),
+    };
+    setLogs(prev => [tempLog, ...prev].slice(0, 50));
+
+    // 4. API ga yuborish
+    try {
+      await api.createLog(cleanAction, performer);
+    } catch (e) {
+      console.error('Log API xatosi:', e.message);
+      // UI dan temp logni olib tashlaymiz
+      setLogs(prev => prev.filter(l => l._id !== tempLog._id));
+    }
+  }, [currentUser]);
+  // ────────────────────────────────────────────────────────────────────────
 
   const isSuperAdmin   = currentUser?.role === 'SUPER_ADMIN';
   const isAdminOrSuper = isSuperAdmin || currentUser?.role === 'ADMIN';
@@ -142,32 +167,11 @@ const App = () => {
                   <nav className="p-6 space-y-2 flex-1">
                     {isAdminOrSuper && (
                       <>
-                        <NavItem
-                          to="/"
-                          icon={<LayoutDashboard size={20}/>}
-                          label="Asosiy Panel"
-                        />
-                        <NavItem
-                          to="/employees"
-                          icon={<Users size={20}/>}
-                          label="Xodimlar"
-                        />
-                        <NavItem
-                          to="/payroll"
-                          icon={<CreditCard size={20}/>}
-                          label="Ish haqi"
-                        />
-                        {/* <NavItem
-                          to="/excel"
-                          icon={<FileSpreadsheet size={20}/>}
-                          label="Hisobotlar"
-                        /> */}
+                        <NavItem to="/"           icon={<LayoutDashboard size={20}/>} label="Asosiy Panel" />
+                        <NavItem to="/employees"  icon={<Users size={20}/>}           label="Xodimlar" />
+                        <NavItem to="/payroll"    icon={<CreditCard size={20}/>}      label="Ish haqi" />
                         {isSuperAdmin && (
-                          <NavItem
-                            to="/objects"
-                            icon={<Building2 size={20}/>}
-                            label="Obyektlar"
-                          />
+                          <NavItem to="/objects"  icon={<Building2 size={20}/>}       label="Obyektlar" />
                         )}
                       </>
                     )}
@@ -231,125 +235,68 @@ const App = () => {
                   <div className="p-4 md:p-8 flex-1 overflow-y-auto">
                     <Routes>
 
-                      {/* Index — admin yoki employee portal */}
                       <Route
                         index
                         element={
                           isAdminOrSuper
-                            ? <Dashboard
-                                employees={employees}
-                                attendance={attendance}
-                                payroll={payroll}
-                                logs={logs}
-                              />
-                            : <EmployeePortal
-                                user={currentUser}
-                                employees={employees}
-                                attendance={attendance}
-                                payroll={payroll}
-                                objects={objects}
-                                onRefresh={loadData}
-                              />
+                            ? <Dashboard employees={employees} attendance={attendance} payroll={payroll} logs={logs} />
+                            : <EmployeePortal user={currentUser} employees={employees} attendance={attendance} payroll={payroll} objects={objects} onRefresh={loadData} />
                         }
                       />
 
-                      {/* Xodimlar */}
                       <Route
                         path="/employees"
                         element={
                           isAdminOrSuper
-                            ? <EmployeeList
-                                employees={employees}
-                                payroll={payroll}
-                                onLog={addLog}
-                                onRefresh={loadData}
-                              />
+                            ? <EmployeeList employees={employees} payroll={payroll} onLog={addLog} onRefresh={loadData} />
                             : <Navigate to="/" />
                         }
                       />
 
-                      {/* Davomat */}
                       <Route
                         path="/attendance"
                         element={
                           isAdminOrSuper
-                            ? <Attendance
-                                employees={employees}
-                                attendance={attendance}
-                                userRole={currentUser.role}
-                                onLog={addLog}
-                                onRefresh={loadData}
-                              />
+                            ? <Attendance employees={employees} attendance={attendance} userRole={currentUser.role} onLog={addLog} onRefresh={loadData} />
                             : <Navigate to="/" />
                         }
                       />
 
-                      {/* Ish haqi */}
                       <Route
                         path="/payroll"
                         element={
                           isAdminOrSuper
-                            ? <Payroll
-                                employees={employees}
-                                attendance={attendance}
-                                payroll={payroll}
-                                objects={objects}
-                                userRole={currentUser.role}
-                                onLog={addLog}
-                                onRefresh={loadData}
-                              />
+                            ? <Payroll employees={employees} attendance={attendance} payroll={payroll} objects={objects} userRole={currentUser.role} onLog={addLog} onRefresh={loadData} />
                             : <Navigate to="/" />
                         }
                       />
 
-                      {/* Hisobotlar & Eksport */}
                       <Route
                         path="/excel"
                         element={
                           isAdminOrSuper
-                            ? <Excel
-                                employees={employees}
-                                attendance={attendance}
-                                payroll={payroll}
-                                objects={objects}
-                              />
+                            ? <Excel employees={employees} attendance={attendance} payroll={payroll} objects={objects} />
                             : <Navigate to="/" />
                         }
                       />
 
-                      {/* Obyektlar — faqat SUPER_ADMIN */}
                       <Route
                         path="/objects"
                         element={
                           isSuperAdmin
-                            ? <ObjectsManager
-                                objects={objects}
-                                payroll={payroll}
-                                userRole={currentUser.role}
-                                onRefresh={loadData}
-                              />
+                            ? <ObjectsManager objects={objects} payroll={payroll} userRole={currentUser.role} onRefresh={loadData} />
                             : <Navigate to="/" />
                         }
                       />
 
-                      {/* Employee portal */}
                       <Route
                         path="/my-portal"
                         element={
-                          <EmployeePortal
-                            user={currentUser}
-                            employees={employees}
-                            attendance={attendance}
-                            payroll={payroll}
-                            objects={objects}
-                            onRefresh={loadData}
-                          />
+                          <EmployeePortal user={currentUser} employees={employees} attendance={attendance} payroll={payroll} objects={objects} onRefresh={loadData} />
                         }
                       />
 
-                      {/* 404 fallback */}
                       <Route path="*" element={<Navigate to="/" />} />
-
                     </Routes>
                   </div>
                 </main>

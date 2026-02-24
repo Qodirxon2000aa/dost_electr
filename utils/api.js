@@ -1,15 +1,39 @@
-const BASE_URL = process.env.REACT_APP_API_URL || 'https://nodirkhanov.uz/api';
+const BASE_URL = 'https://nodirkhanov.uz/api';
+
+const getToken = () => {
+  try {
+    const user = localStorage.getItem('currentUser');
+    return user ? JSON.parse(user).token : null;
+  } catch {
+    return null;
+  }
+};
 
 const request = async (method, path, body = null) => {
+  const token = getToken();
   const options = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
   };
   if (body) options.body = JSON.stringify(body);
 
   const res = await fetch(`${BASE_URL}${path}`, options);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || 'Server xatosi');
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error('Server javobi noto\'g\'ri');
+  }
+
+  if (!res.ok) {
+    // Backend ba'zan { message }, ba'zan { error } qaytaradi
+    throw new Error(data.message || data.error || `Server xatosi: ${res.status}`);
+  }
+
   return data;
 };
 
@@ -45,9 +69,30 @@ export const api = {
   getObjects:      ()         => request('GET',    '/objects'),
   createObject:    (body)     => request('POST',   '/objects', body),
   deleteObject:    (id)       => request('DELETE', `/objects/${id}`),
-  addObjectIncome: (id, body) => request('PATCH',  `/objects/${id}/income`, body), // ← body qo'shildi
+  addObjectIncome: (id, body) => request('PATCH',  `/objects/${id}/income`, body),
 
   // Logs
-  getLogs:   ()                           => request('GET',  '/logs'),
-  createLog: (action, performer = 'admin') => request('POST', '/logs', { action, performer }),
-};
+  getLogs: () => request('GET', '/logs'),
+  createLog: (action, performer) => {
+    // ── DEBUG (keyin o'chirasiz) ──
+    console.log('=== createLog DEBUG ===');
+    console.log('action:', JSON.stringify(action));
+    console.log('performer:', JSON.stringify(performer));
+    console.log('typeof action:', typeof action);
+
+    if (!action || !String(action).trim()) {
+      console.warn('createLog: action bo\'sh — yuborilmadi');
+      return Promise.resolve();
+    }
+
+    const body = {
+      action:    String(action).trim(),
+      performer: String(performer || 'Sistema').trim(),
+    };
+
+    console.log('yuborilayotgan body:', JSON.stringify(body));
+    // ── DEBUG tugadi ──
+
+    return request('POST', '/logs', body);
+  },
+};  
