@@ -2,12 +2,372 @@ import React, { useState, useMemo } from 'react';
 import {
   Banknote, Trash2, DollarSign, CheckCircle, Calendar,
   ChevronDown, UserCheck, X, Award, Building2, Users,
-  BarChart3, ClipboardList, Plus
+  BarChart3, ClipboardList, Plus, TrendingUp, Hash,
+  Clock, Layers, ChevronRight
 } from 'lucide-react';
 import { api } from '../utils/api';
 
 const MONTH_LABELS = ['Yanvar','Fevral','Mart','Aprel','May','Iyun','Iyul','Avgust','Sentyabr','Oktyabr','Noyabr','Dekabr'];
 const MONTH_SHORT  = ['Yan','Fev','Mar','Apr','May','Iyn','Iyl','Avg','Sen','Okt','Noy','Dek'];
+
+const EmployeeDetailModal = ({ empStats, onClose }) => {
+  if (!empStats) return null;
+  const { emp, totalTaken, totalEarned, remaining, workedDays, payments } = empStats;
+
+  /* ── Sana filtri state ── */
+  const allDates    = payments.map(p => p.date).filter(Boolean).sort();
+  const minDate     = allDates[0] || '';
+  const maxDate     = allDates[allDates.length - 1] || '';
+
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo,   setDateTo]   = useState('');
+  const isFiltered = dateFrom || dateTo;
+
+  /* Filterlangan to'lovlar */
+  const filteredPayments = useMemo(() => {
+    if (!isFiltered) return payments;
+    return payments.filter(p => {
+      const d = p.date || '';
+      if (dateFrom && d < dateFrom) return false;
+      if (dateTo   && d > dateTo)   return false;
+      return true;
+    });
+  }, [payments, dateFrom, dateTo, isFiltered]);
+
+  /* Filterlangan statistika */
+  const filtTotal    = filteredPayments.reduce((s, p) => s + (Number(p.calculatedSalary) || 0), 0);
+  const filtCount    = filteredPayments.length;
+  const filtEarnedPct = totalEarned > 0 ? Math.min(Math.round((filtTotal / totalEarned) * 100), 100) : 0;
+
+  /* Obyekt bo'yicha — filterlangan */
+  const byObject = useMemo(() => {
+    const map = {};
+    filteredPayments.forEach(p => {
+      const key = p.objectName || 'Belgilanmagan';
+      if (!map[key]) map[key] = { total: 0, count: 0, dates: [] };
+      map[key].total += Number(p.calculatedSalary) || 0;
+      map[key].count += 1;
+      if (p.date) map[key].dates.push(p.date);
+    });
+    return Object.entries(map)
+      .map(([name, data]) => {
+        const ds = [...data.dates].sort();
+        return { name, total: data.total, count: data.count, firstDate: ds[0] || '—', lastDate: ds[ds.length-1] || '—' };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [filteredPayments]);
+
+  /* Oy bo'yicha — filterlangan */
+  const byMonth = useMemo(() => {
+    const map = {};
+    filteredPayments.forEach(p => {
+      const key = p.month || (p.date ? p.date.slice(0, 7) : "Noma'lum");
+      if (!map[key]) map[key] = 0;
+      map[key] += Number(p.calculatedSalary) || 0;
+    });
+    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).slice(0, 8);
+  }, [filteredPayments]);
+
+  const maxMonthVal = byMonth[0]?.[1] || 1;
+
+  /* So'nggi to'lovlar — filterlangan */
+  const recentPayments = [...filteredPayments]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 10);
+
+  const firstPayDate = allDates[0] || '—';
+  const lastPayDate  = allDates[allDates.length - 1] || '—';
+  const earnedPctAll = totalEarned > 0 ? Math.min(Math.round((totalTaken / totalEarned) * 100), 100) : 0;
+
+  const clearFilter = () => { setDateFrom(''); setDateTo(''); };
+
+  return (
+    <div
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center backdrop-blur-md bg-slate-950/85"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-slate-900 border border-slate-700 rounded-t-[2rem] sm:rounded-[2rem] w-full sm:max-w-lg max-h-[92vh] overflow-y-auto shadow-2xl">
+
+        {/* ── STICKY HEADER ── */}
+        <div className="sticky top-0 z-10 bg-slate-900 border-b border-slate-800 px-5 pt-5 pb-4 space-y-4">
+
+          {/* Nom va yopish */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 shrink-0 bg-yellow-500/10 border border-yellow-500/30 rounded-2xl flex items-center justify-center text-yellow-500 font-black text-xl">
+                {emp.name[0]}
+              </div>
+              <div>
+                <h3 className="text-white font-black italic uppercase text-base leading-tight">{emp.name}</h3>
+                <p className="text-slate-500 text-[9px] font-black uppercase tracking-wider">{emp.position}</p>
+              </div>
+            </div>
+            <button onClick={onClose}
+              className="w-9 h-9 bg-slate-800 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-colors">
+              <X className="text-slate-400" size={16}/>
+            </button>
+          </div>
+
+          {/* ── SANA FILTRI ── */}
+          <div className="bg-slate-950 rounded-2xl border border-violet-500/20 p-3 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Calendar className="text-violet-400" size={12}/>
+                <span className="text-[8px] text-violet-400 font-black uppercase tracking-widest">Sana Oralig'i</span>
+              </div>
+              {isFiltered && (
+                <button onClick={clearFilter}
+                  className="text-[8px] text-rose-400 font-black uppercase bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-lg hover:bg-rose-500/20 active:scale-95 transition-all flex items-center gap-1">
+                  <X size={9}/> Tozalash
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-1">Dan</p>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  min={minDate || undefined}
+                  max={dateTo || maxDate || undefined}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-violet-500 text-white px-3 py-2.5 rounded-xl font-bold text-xs outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-1">Gacha</p>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || minDate || undefined}
+                  max={maxDate || undefined}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 focus:border-violet-500 text-white px-3 py-2.5 rounded-xl font-bold text-xs outline-none transition-colors"
+                />
+              </div>
+            </div>
+            {isFiltered && (
+              <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                <span className="text-[8px] text-violet-300 font-black bg-violet-500/10 border border-violet-500/20 px-2 py-1 rounded-lg">
+                  🔍 {dateFrom || '...'} → {dateTo || '...'}
+                </span>
+                <span className="text-[8px] text-slate-400 font-bold">{filtCount} ta to'lov topildi</span>
+              </div>
+            )}
+          </div>
+
+          {/* Asosiy statistika (filterlangan) */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              {
+                label: isFiltered ? 'Oraliq to\'lovlar' : 'Ish kunlari',
+                val:   isFiltered ? filtCount.toString() : `${workedDays}`,
+                unit:  isFiltered ? 'ta' : 'kun',
+                color: 'text-white',
+                bg:    'bg-slate-800/60 border-slate-700'
+              },
+              {
+                label: isFiltered ? 'Oraliq jami' : 'Jami olgan',
+                val:   (isFiltered ? filtTotal : totalTaken).toLocaleString(),
+                unit:  'UZS',
+                color: 'text-yellow-500',
+                bg:    'bg-yellow-500/10 border-yellow-500/20'
+              },
+              {
+                label: 'Umumiy summa',
+                val:    totalEarned.toLocaleString(),
+                unit:  'UZS — barcha vaqt',
+                color: 'text-blue-400',
+                bg:    'bg-blue-500/10 border-blue-500/20'
+              },
+              {
+                label: 'Qoldiq',
+                val:   remaining.toLocaleString(),
+                unit:  'UZS',
+                color: remaining >= 0 ? 'text-emerald-400' : 'text-rose-400',
+                bg:    remaining >= 0 ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20'
+              },
+            ].map(s => (
+              <div key={s.label} className={`p-3 rounded-xl border text-center ${s.bg}`}>
+                <p className="text-[7px] text-slate-500 font-black uppercase tracking-widest mb-1 leading-tight">{s.label}</p>
+                <p className={`font-black text-sm leading-tight ${s.color}`}>{s.val}</p>
+                <p className="text-[8px] text-slate-600 mt-0.5">{s.unit}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-5 space-y-5">
+
+          {/* ── PROGRESS BAR ── */}
+          <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-[8px] text-slate-500 font-black uppercase tracking-widest">
+                {isFiltered ? 'Oraliq to\'lov / Umumiy hisoblangan' : 'To\'lov Progressi'}
+              </span>
+              <span className="text-[9px] text-white font-black">
+                {isFiltered ? filtEarnedPct : earnedPctAll}%
+              </span>
+            </div>
+            <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+              {/* Agar filter bo'lsa — ikki qatlam: umumiy + oraliq */}
+              {isFiltered ? (
+                <div className="relative h-full w-full">
+                  <div className="absolute h-full bg-slate-700 rounded-full" style={{ width: `${earnedPctAll}%` }}/>
+                  <div className="absolute h-full bg-gradient-to-r from-violet-600 to-violet-400 rounded-full" style={{ width: `${filtEarnedPct}%` }}/>
+                </div>
+              ) : (
+                <div
+                  className={`h-full rounded-full ${remaining < 0 ? 'bg-rose-500' : 'bg-gradient-to-r from-yellow-600 to-yellow-400'}`}
+                  style={{ width: `${earnedPctAll}%` }}
+                />
+              )}
+            </div>
+            <div className="flex justify-between text-[8px] font-bold text-slate-600">
+              {isFiltered ? (
+                <>
+                  <span className="text-violet-400">Oraliq: {filtTotal.toLocaleString()} UZS</span>
+                  <span>Jami olgan: {totalTaken.toLocaleString()} UZS</span>
+                </>
+              ) : (
+                <>
+                  <span>Olingan: {totalTaken.toLocaleString()} UZS</span>
+                  <span>Hisoblangan: {totalEarned.toLocaleString()} UZS</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* ── QO'SHIMCHA MA'LUMOTLAR ── */}
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { icon: <TrendingUp size={12}/>, label: 'Kunlik stavka',   val: `${(Number(emp.salaryRate)||0).toLocaleString()} UZS`, color: 'text-blue-400',   accent: 'text-blue-400' },
+              { icon: <Hash size={12}/>,       label: "Jami to'lovlar", val: `${payments.length} ta`,                               color: 'text-purple-400', accent: 'text-purple-400' },
+              { icon: <Clock size={12}/>,      label: "Birinchi to'lov", val: firstPayDate,                                         color: 'text-slate-300',  accent: 'text-slate-400' },
+              { icon: <Clock size={12}/>,      label: "Oxirgi to'lov",  val: lastPayDate,                                           color: 'text-slate-300',  accent: 'text-slate-400' },
+            ].map(s => (
+              <div key={s.label} className="bg-slate-950 rounded-xl border border-slate-800 p-3">
+                <div className={`flex items-center gap-1.5 mb-1 ${s.accent}`}>{s.icon}<span className="text-[7px] font-black uppercase tracking-widest">{s.label}</span></div>
+                <p className={`font-black text-sm ${s.color}`}>{s.val}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* ── OBYEKTLAR BO'YICHA ── */}
+          {byObject.length > 0 && (
+            <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+              <div className="px-4 py-3 bg-slate-900/40 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="text-blue-400" size={13}/>
+                  <p className="text-[8px] text-blue-400 font-black uppercase tracking-widest">Obyektlar Bo'yicha Taqsimot</p>
+                </div>
+                {isFiltered && <span className="text-[7px] text-violet-400 font-black bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded">Filterlangan</span>}
+              </div>
+              <div className="p-4 space-y-4">
+                {byObject.map(obj => {
+                  const pct = filtTotal > 0 ? Math.round((obj.total / filtTotal) * 100) : 0;
+                  return (
+                    <div key={obj.name}>
+                      <div className="flex items-start justify-between mb-1.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white font-black text-sm truncate">{obj.name}</span>
+                            <span className="text-[7px] text-blue-400 font-black bg-blue-500/10 px-1.5 py-0.5 rounded">{obj.count} ta to'lov</span>
+                          </div>
+                          <span className="text-[8px] text-slate-500 font-bold mt-0.5 block">📅 {obj.firstDate} — {obj.lastDate}</span>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <p className="text-yellow-500 font-black text-sm">{obj.total.toLocaleString()}</p>
+                          <p className="text-[8px] text-slate-600">UZS • {pct}%</p>
+                        </div>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full" style={{ width: `${pct}%` }}/>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── OY BO'YICHA GRAFIK ── */}
+          {byMonth.length > 0 && (
+            <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+              <div className="px-4 py-3 bg-slate-900/40 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="text-emerald-400" size={13}/>
+                  <p className="text-[8px] text-emerald-400 font-black uppercase tracking-widest">Oylar Bo'yicha Tarix</p>
+                </div>
+                {isFiltered && <span className="text-[7px] text-violet-400 font-black bg-violet-500/10 border border-violet-500/20 px-2 py-0.5 rounded">Filterlangan</span>}
+              </div>
+              <div className="p-4 space-y-2.5">
+                {byMonth.map(([month, amount]) => {
+                  const pct = Math.round((amount / maxMonthVal) * 100);
+                  const [y, m] = month.split('-');
+                  const label = `${MONTH_LABELS[Number(m) - 1] || m} ${y}`;
+                  return (
+                    <div key={month} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 font-black text-[10px]">{label}</span>
+                        <span className="text-emerald-400 font-black text-[10px]">{amount.toLocaleString()} UZS</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-emerald-700 to-emerald-400 rounded-full" style={{ width: `${pct}%` }}/>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── TO'LOVLAR RO'YXATI ── */}
+          {recentPayments.length > 0 ? (
+            <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden">
+              <div className="px-4 py-3 bg-slate-900/40 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Calendar className="text-yellow-500" size={13}/>
+                  <p className="text-[8px] text-yellow-500 font-black uppercase tracking-widest">
+                    {isFiltered ? "Oraliq To'lovlar" : "So'nggi To'lovlar"}
+                  </p>
+                </div>
+                {isFiltered && (
+                  <span className="text-[8px] text-yellow-500 font-black">{filtCount} ta • {filtTotal.toLocaleString()} UZS</span>
+                )}
+              </div>
+              <div className="divide-y divide-slate-900 max-h-[320px] overflow-y-auto">
+                {recentPayments.map(p => (
+                  <div key={p._id || p.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-900/30 transition-colors">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-white font-black text-xs">{p.date || p.month}</span>
+                        {p.objectName && (
+                          <span className="text-[7px] text-blue-400 font-black bg-blue-500/10 px-1.5 py-0.5 rounded">{p.objectName}</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-yellow-500 font-black text-sm shrink-0 ml-3">
+                      {(Number(p.calculatedSalary) || 0).toLocaleString()} UZS
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : isFiltered ? (
+            <div className="bg-slate-950 rounded-2xl border border-slate-800 p-10 text-center">
+              <p className="text-slate-600 font-black uppercase text-xs">Bu oraliqda to'lovlar yo'q</p>
+              <button onClick={clearFilter} className="mt-3 text-[9px] text-violet-400 font-black bg-violet-500/10 border border-violet-500/20 px-3 py-1.5 rounded-lg hover:bg-violet-500/20 active:scale-95 transition-all">
+                Filterni tozalash
+              </button>
+            </div>
+          ) : null}
+
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefresh }) => {
   const [activeTab, setActiveTab]               = useState('salary');
@@ -23,18 +383,16 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
   const [salaryObjectId, setSalaryObjectId]     = useState('');
   const [salaryLoading, setSalaryLoading]       = useState(false);
 
-  /* ══════════════════════════════════════
-     DAVOMAT+ STATE
-  ══════════════════════════════════════ */
+  const [detailEmpStats, setDetailEmpStats]     = useState(null);
+
   const [manualEmpId,   setManualEmpId]   = useState('');
   const [manualObjId,   setManualObjId]   = useState('');
   const [manualDate,    setManualDate]    = useState(new Date().toISOString().split('T')[0]);
   const [manualLoading, setManualLoading] = useState(false);
-  const [manualMsg,     setManualMsg]     = useState(null); // { type:'ok'|'err', text }
+  const [manualMsg,     setManualMsg]     = useState(null);
 
   const pendingAttendance = attendance.filter(a => a.status === 'PENDING');
 
-  /* ── HISOB-KITOBLAR ── */
   const approvedPayroll = useMemo(() => payroll.filter(p => p.status === 'APPROVED'), [payroll]);
 
   const currentMonthPayroll = useMemo(() =>
@@ -107,7 +465,6 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
     return employeeStats.find(s => String(s.empId) === String(selectedEmployee)) || null;
   }, [selectedEmployee, employeeStats]);
 
-  /* Tanlangan xodimning o'sha kundagi davomati */
   const manualExistingAtt = useMemo(() => {
     if (!manualEmpId || !manualDate) return null;
     return attendance.find(a =>
@@ -116,7 +473,6 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
     ) || null;
   }, [attendance, manualEmpId, manualDate]);
 
-  /* Ko'rsatiladigan kundagi barcha davomat */
   const manualDateAtts = useMemo(() => {
     if (!manualDate) return [];
     return [...attendance]
@@ -183,40 +539,26 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
     catch { alert("Xatolik!"); }
   };
 
-  /* ══════════════════════════════════════
-     ADMIN — MANUAL DAVOMAT QO'SHISH
-  ══════════════════════════════════════ */
   const handleManualAttendance = async () => {
     if (!manualEmpId) return setManualMsg({ type: 'err', text: "Xodimni tanlang!" });
     if (!manualObjId) return setManualMsg({ type: 'err', text: "Obyektni tanlang!" });
     if (!manualDate)  return setManualMsg({ type: 'err', text: "Sanani kiriting!" });
-
     setManualLoading(true);
     setManualMsg(null);
     try {
       const emp     = employees.find(e => (e._id || e.id) === manualEmpId);
       const obj     = objects.find(o => (o._id || o.id) === manualObjId);
       const objName = obj?.name || '';
-
       await api.upsertAttendance({
-        employeeId: manualEmpId,
-        objectId:   manualObjId,
-        objectName: objName,
-        date:       manualDate,
-        status:     'PRESENT',   // to'g'ridan-to'g'ri PRESENT — so'rovsiz
-        markedBy:   'admin',
+        employeeId: manualEmpId, objectId: manualObjId, objectName: objName,
+        date: manualDate, status: 'PRESENT', markedBy: 'admin',
       });
-
       onLog(`${emp?.name || ''} — ${manualDate} (${objName}) admin tomonidan qo'shildi`);
       setManualMsg({ type: 'ok', text: `✅ ${emp?.name} — ${manualDate} muvaffaqiyatli tasdiqlandi` });
-      setManualEmpId('');
-      setManualObjId('');
-      onRefresh();
+      setManualEmpId(''); setManualObjId(''); onRefresh();
     } catch (err) {
       setManualMsg({ type: 'err', text: err.message });
-    } finally {
-      setManualLoading(false);
-    }
+    } finally { setManualLoading(false); }
   };
 
   const changeYear = (delta) => {
@@ -232,23 +574,14 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
   return (
     <div className="space-y-4 pb-10">
 
-      {/* ══════════════════════════════════════
-          TAB NAVIGATSIYA
-      ══════════════════════════════════════ */}
       <div className="flex bg-slate-950 p-1.5 rounded-2xl border border-slate-800 shadow-xl gap-1">
-        <TabBtn active={activeTab === 'salary'}     onClick={() => setActiveTab('salary')}
-          icon={<Banknote size={14}/>}       label="Oylik" />
-        <TabBtn active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')}
-          icon={<CheckCircle size={14}/>}    label="Davomat" badge={pendingAttendance.length} />
-        <TabBtn active={activeTab === 'manual'}     onClick={() => setActiveTab('manual')}
-          icon={<ClipboardList size={14}/>}  label="Davomat+" accent />
-        <TabBtn active={activeTab === 'finance'}    onClick={() => setActiveTab('finance')}
-          icon={<DollarSign size={14}/>}     label="Moliya" />
+        <TabBtn active={activeTab === 'salary'}     onClick={() => setActiveTab('salary')}   icon={<Banknote size={14}/>}      label="Oylik" />
+        <TabBtn active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} icon={<CheckCircle size={14}/>}  label="Davomat" badge={pendingAttendance.length} />
+        <TabBtn active={activeTab === 'manual'}     onClick={() => setActiveTab('manual')}   icon={<ClipboardList size={14}/>} label="Davomat+" accent />
+        <TabBtn active={activeTab === 'finance'}    onClick={() => setActiveTab('finance')}  icon={<DollarSign size={14}/>}    label="Moliya" />
       </div>
 
-      {/* ══════════════════════════════════════
-          OYLIK BERISH
-      ══════════════════════════════════════ */}
+      {/* OYLIK BERISH */}
       {activeTab === 'salary' && (
         <div className="space-y-3">
           <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4">
@@ -263,7 +596,8 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
           {employees.filter(e => e.status === 'ACTIVE').length === 0 ? (
             <Empty text="Faol xodimlar yo'q"/>
           ) : employees.filter(e => e.status === 'ACTIVE').map(emp => {
-            const bal = getEmpBalance(emp);
+            const bal     = getEmpBalance(emp);
+            const empStat = employeeStats.find(s => String(s.empId) === String(emp._id || emp.id));
             return (
               <div key={emp._id || emp.id} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 shadow-lg">
                 <div className="flex items-center justify-between mb-3">
@@ -282,17 +616,28 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                   </button>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { label:'Ish kunlari', val:bal.workedDays,                   unit:'kun', color:'text-white'       },
-                    { label:'Hisoblangan', val:bal.totalEarned.toLocaleString(), unit:'UZS', color:'text-emerald-500' },
-                    { label:'Qoldiq',      val:bal.remaining.toLocaleString(),   unit:'UZS', color:bal.remaining>=0?'text-yellow-500':'text-rose-500' },
-                  ].map(s => (
-                    <div key={s.label} className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-center">
-                      <p className="text-[8px] text-slate-500 font-black uppercase mb-0.5">{s.label}</p>
-                      <p className={`font-black text-sm leading-tight ${s.color}`}>{s.val}</p>
-                      <p className="text-[8px] text-slate-600">{s.unit}</p>
-                    </div>
-                  ))}
+                  <div className="bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 text-center">
+                    <p className="text-[8px] text-slate-500 font-black uppercase mb-0.5">Ish kunlari</p>
+                    <p className="font-black text-sm leading-tight text-white">{bal.workedDays}</p>
+                    <p className="text-[8px] text-slate-600">kun</p>
+                  </div>
+                  {/* BOSILADIGAN — to'liq ma'lumot modali */}
+                  <button
+                    onClick={() => empStat && setDetailEmpStats(empStat)}
+                    className="bg-slate-900/60 p-2.5 rounded-xl border border-blue-500/30 text-center hover:bg-blue-500/10 hover:border-blue-500/50 active:scale-95 transition-all group relative"
+                  >
+                    <p className="text-[8px] text-blue-400 font-black uppercase mb-0.5">To'liq ma'lumot</p>
+                    <p className="font-black text-sm leading-tight text-blue-400">{bal.totalTaken.toLocaleString()}</p>
+                    <p className="text-[8px] text-slate-600">UZS olingan</p>
+                    <ChevronRight size={10} className="absolute top-1 right-1 text-blue-500/50 group-hover:text-blue-400 transition-colors"/>
+                  </button>
+                  <div className={`bg-slate-900/60 p-2.5 rounded-xl border text-center ${bal.remaining >= 0 ? 'border-slate-800' : 'border-rose-500/20'}`}>
+                    <p className="text-[8px] text-slate-500 font-black uppercase mb-0.5">Qoldiq</p>
+                    <p className={`font-black text-sm leading-tight ${bal.remaining >= 0 ? 'text-yellow-500' : 'text-rose-500'}`}>
+                      {bal.remaining.toLocaleString()}
+                    </p>
+                    <p className="text-[8px] text-slate-600">UZS</p>
+                  </div>
                 </div>
               </div>
             );
@@ -300,39 +645,27 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
         </div>
       )}
 
-      {/* ══════════════════════════════════════
-          DAVOMAT — PENDING SO'ROVLAR
-      ══════════════════════════════════════ */}
+      {/* DAVOMAT PENDING */}
       {activeTab === 'attendance' && (
         <div className="space-y-3">
           {pendingAttendance.length === 0 ? (
             <Empty text="Yangi davomat so'rovi yo'q"/>
           ) : pendingAttendance.map(a => {
             const id  = a._id || a.id;
-            const emp = employees.find(e =>
-              String(e._id || e.id) === String(a.employeeId?._id || a.employeeId)
-            );
+            const emp = employees.find(e => String(e._id || e.id) === String(a.employeeId?._id || a.employeeId));
             return (
               <div key={id} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 shadow-md">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <p className="text-white font-black italic truncate">{emp?.name || "Noma'lum"}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-[9px] text-blue-400 font-black uppercase bg-blue-500/10 px-2 py-0.5 rounded">
-                        {a.objectName || '—'}
-                      </span>
+                      <span className="text-[9px] text-blue-400 font-black uppercase bg-blue-500/10 px-2 py-0.5 rounded">{a.objectName || '—'}</span>
                       <span className="text-[9px] text-slate-500 font-bold">{a.date}</span>
                     </div>
                   </div>
                   <div className="flex gap-2 ml-3 shrink-0">
-                    <button onClick={() => handleApproveAttendance(id)}
-                      className="p-2.5 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white active:scale-95 transition-all">
-                      <CheckCircle size={18}/>
-                    </button>
-                    <button onClick={() => handleRejectAttendance(id)}
-                      className="p-2.5 bg-rose-500/10 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white active:scale-95 transition-all">
-                      <Trash2 size={18}/>
-                    </button>
+                    <button onClick={() => handleApproveAttendance(id)} className="p-2.5 bg-emerald-500/10 text-emerald-500 rounded-xl hover:bg-emerald-500 hover:text-white active:scale-95 transition-all"><CheckCircle size={18}/></button>
+                    <button onClick={() => handleRejectAttendance(id)}  className="p-2.5 bg-rose-500/10 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white active:scale-95 transition-all"><Trash2 size={18}/></button>
                   </div>
                 </div>
               </div>
@@ -341,13 +674,9 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
         </div>
       )}
 
-      {/* ══════════════════════════════════════
-          DAVOMAT+ — ADMIN MANUAL QO'SHISH
-      ══════════════════════════════════════ */}
+      {/* DAVOMAT+ */}
       {activeTab === 'manual' && (
         <div className="space-y-3">
-
-          {/* Header */}
           <div className="bg-slate-950 rounded-2xl border border-emerald-500/20 p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 shrink-0 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center">
@@ -355,182 +684,91 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
               </div>
               <div>
                 <h2 className="text-white font-black italic uppercase text-sm">Davomat Qo'shish</h2>
-                <p className="text-slate-500 text-[9px] font-black uppercase tracking-wide">
-                  So'rovsiz — admin to'g'ridan-to'g'ri tasdiqlaydi
-                </p>
+                <p className="text-slate-500 text-[9px] font-black uppercase tracking-wide">So'rovsiz — admin to'g'ridan-to'g'ri tasdiqlaydi</p>
               </div>
             </div>
           </div>
-
-          {/* ── FORM ── */}
           <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4 space-y-3 shadow-xl">
-
-            {/* Xodim */}
             <div>
-              <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">
-                Xodim
-              </label>
-              <select
-                value={manualEmpId}
-                onChange={e => { setManualEmpId(e.target.value); setManualMsg(null); }}
-                className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white px-4 py-3 rounded-xl font-bold text-sm outline-none transition-all"
-              >
+              <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">Xodim</label>
+              <select value={manualEmpId} onChange={e => { setManualEmpId(e.target.value); setManualMsg(null); }}
+                className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white px-4 py-3 rounded-xl font-bold text-sm outline-none transition-all">
                 <option value="">— Xodimni tanlang —</option>
                 {employees.filter(e => e.status === 'ACTIVE').map(e => (
                   <option key={e._id || e.id} value={e._id || e.id}>{e.name}</option>
                 ))}
               </select>
             </div>
-
-            {/* Obyekt */}
             <div>
-              <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">
-                Obyekt
-              </label>
-              <select
-                value={manualObjId}
-                onChange={e => { setManualObjId(e.target.value); setManualMsg(null); }}
-                className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white px-4 py-3 rounded-xl font-bold text-sm outline-none transition-all"
-              >
+              <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">Obyekt</label>
+              <select value={manualObjId} onChange={e => { setManualObjId(e.target.value); setManualMsg(null); }}
+                className="w-full bg-slate-900 border border-slate-700 focus:border-emerald-500 text-white px-4 py-3 rounded-xl font-bold text-sm outline-none transition-all">
                 <option value="">— Obyektni tanlang —</option>
                 {objects.map(o => (
                   <option key={o._id || o.id} value={o._id || o.id}>{o.name}</option>
                 ))}
               </select>
             </div>
-
-           {/* Sana */}
-<div>
-  <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">
-    Sana
-  </label>
-  <input
-    type="date"
-    value={manualDate}
-    // max olib tashlandi → endi kelajak sanani ham tanlash mumkin
-    onChange={e => {
-      setManualDate(e.target.value);
-      setManualMsg(null);
-    }}
-    className="w-full bg-slate-900 border border-slate-700 
-               focus:border-slate-500 focus:ring-0
-               text-white px-4 py-3 rounded-xl 
-               font-bold text-sm outline-none transition-colors"
-  />
-</div>
-
-            {/* Tanlangan xodimning o'sha kundagi holati */}
+            <div>
+              <label className="text-[8px] text-slate-500 font-black uppercase tracking-widest block mb-1.5">Sana</label>
+              <input type="date" value={manualDate}
+                onChange={e => { setManualDate(e.target.value); setManualMsg(null); }}
+                className="w-full bg-slate-900 border border-slate-700 focus:border-slate-500 focus:ring-0 text-white px-4 py-3 rounded-xl font-bold text-sm outline-none transition-colors"/>
+            </div>
             {manualExistingAtt && (
-              <div className={`rounded-xl px-4 py-3 border font-bold text-sm ${
-                manualExistingAtt.status === 'PRESENT'
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
-              }`}>
+              <div className={`rounded-xl px-4 py-3 border font-bold text-sm ${manualExistingAtt.status === 'PRESENT' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'}`}>
                 {manualExistingAtt.status === 'PRESENT'
                   ? `✅ Bu xodim ${manualDate} kuni allaqachon tasdiqlangan — ${manualExistingAtt.objectName || ''}`
-                  : `⏳ Bu xodim so'rov yuborgan (${manualExistingAtt.objectName || ''}) — "Tasdiqlash" bosib yangilang`
-                }
+                  : `⏳ Bu xodim so'rov yuborgan (${manualExistingAtt.objectName || ''}) — "Tasdiqlash" bosib yangilang`}
               </div>
             )}
-
-            {/* Natija xabar */}
             {manualMsg && (
-              <div className={`rounded-xl px-4 py-3 border font-bold text-sm ${
-                manualMsg.type === 'ok'
-                  ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                  : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-              }`}>
+              <div className={`rounded-xl px-4 py-3 border font-bold text-sm ${manualMsg.type === 'ok' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
                 {manualMsg.text}
               </div>
             )}
-
-            {/* Tugma */}
-            <button
-              onClick={handleManualAttendance}
+            <button onClick={handleManualAttendance}
               disabled={manualLoading || !manualEmpId || !manualObjId || !manualDate}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-xl transition-all uppercase tracking-widest text-sm shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2"
-            >
-              {manualLoading
-                ? 'Saqlanmoqda...'
-                : <><Plus size={16}/> Davomatni Tasdiqlash</>
-              }
+              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-xl transition-all uppercase tracking-widest text-sm shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2">
+              {manualLoading ? 'Saqlanmoqda...' : <><Plus size={16}/> Davomatni Tasdiqlash</>}
             </button>
           </div>
 
-          {/* ── KUN DAVOMATI RO'YXATI ── */}
           {manualDateAtts.length > 0 && (
             <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
               <div className="px-4 py-3 bg-slate-900/50 border-b border-slate-800 flex items-center justify-between">
-                <h3 className="text-white font-black uppercase text-xs italic">
-                  📅 {manualDate} — Davomat
-                </h3>
+                <h3 className="text-white font-black uppercase text-xs italic">📅 {manualDate} — Davomat</h3>
                 <div className="flex gap-2">
-                  <span className="text-[8px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
-                    {manualDateAtts.filter(a => a.status === 'PRESENT').length} keldi
-                  </span>
+                  <span className="text-[8px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">{manualDateAtts.filter(a => a.status === 'PRESENT').length} keldi</span>
                   {manualDateAtts.filter(a => a.status === 'PENDING').length > 0 && (
-                    <span className="text-[8px] font-black text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-lg border border-yellow-500/20">
-                      {manualDateAtts.filter(a => a.status === 'PENDING').length} kutilmoqda
-                    </span>
+                    <span className="text-[8px] font-black text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded-lg border border-yellow-500/20">{manualDateAtts.filter(a => a.status === 'PENDING').length} kutilmoqda</span>
                   )}
                 </div>
               </div>
               <div className="divide-y divide-slate-900 max-h-[380px] overflow-y-auto">
                 {manualDateAtts.map(a => {
                   const id  = a._id || a.id;
-                  const emp = employees.find(e =>
-                    String(e._id || e.id) === String(a.employeeId?._id || a.employeeId)
-                  );
+                  const emp = employees.find(e => String(e._id || e.id) === String(a.employeeId?._id || a.employeeId));
                   return (
                     <div key={id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-900/20 transition-colors">
                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                        <div className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center font-black text-sm border ${
-                          a.status === 'PRESENT'
-                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                            : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500'
-                        }`}>
-                          {emp?.name?.[0] || '?'}
-                        </div>
+                        <div className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center font-black text-sm border ${a.status === 'PRESENT' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500'}`}>{emp?.name?.[0] || '?'}</div>
                         <div className="min-w-0">
                           <p className="text-white font-black text-sm truncate">{emp?.name || "Noma'lum"}</p>
                           <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                            {a.objectName && (
-                              <span className="text-[7px] text-blue-400 font-black bg-blue-500/10 px-1.5 py-0.5 rounded">
-                                {a.objectName}
-                              </span>
-                            )}
-                            <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded ${
-                              a.status === 'PRESENT'
-                                ? 'text-emerald-500 bg-emerald-500/10'
-                                : 'text-yellow-500 bg-yellow-500/10'
-                            }`}>
+                            {a.objectName && <span className="text-[7px] text-blue-400 font-black bg-blue-500/10 px-1.5 py-0.5 rounded">{a.objectName}</span>}
+                            <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded ${a.status === 'PRESENT' ? 'text-emerald-500 bg-emerald-500/10' : 'text-yellow-500 bg-yellow-500/10'}`}>
                               {a.status === 'PRESENT' ? '✅ Tasdiqlandi' : '⏳ Kutilmoqda'}
                             </span>
-                            {a.markedBy === 'admin' && (
-                              <span className="text-[7px] text-purple-400 font-black bg-purple-500/10 px-1.5 py-0.5 rounded">
-                                👤 Admin
-                              </span>
-                            )}
+                            {a.markedBy === 'admin' && <span className="text-[7px] text-purple-400 font-black bg-purple-500/10 px-1.5 py-0.5 rounded">👤 Admin</span>}
                           </div>
                         </div>
                       </div>
                       <div className="flex gap-1.5 shrink-0 ml-2">
                         {a.status === 'PENDING' && (
-                          <button
-                            onClick={() => handleApproveAttendance(id)}
-                            className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white active:scale-95 transition-all"
-                            title="Tasdiqlash"
-                          >
-                            <CheckCircle size={15}/>
-                          </button>
+                          <button onClick={() => handleApproveAttendance(id)} className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white active:scale-95 transition-all" title="Tasdiqlash"><CheckCircle size={15}/></button>
                         )}
-                        <button
-                          onClick={() => handleRejectAttendance(id)}
-                          className="p-2 bg-rose-500/10 text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white active:scale-95 transition-all"
-                          title="O'chirish"
-                        >
-                          <Trash2 size={15}/>
-                        </button>
+                        <button onClick={() => handleRejectAttendance(id)} className="p-2 bg-rose-500/10 text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white active:scale-95 transition-all" title="O'chirish"><Trash2 size={15}/></button>
                       </div>
                     </div>
                   );
@@ -541,12 +779,9 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
         </div>
       )}
 
-      {/* ══════════════════════════════════════
-          MOLIYA
-      ══════════════════════════════════════ */}
+      {/* MOLIYA */}
       {activeTab === 'finance' && (
         <div className="space-y-4">
-
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-gradient-to-br from-yellow-500/10 to-slate-950 p-4 rounded-2xl border border-yellow-500/20 shadow-xl">
               <p className="text-[8px] text-yellow-500/70 font-black uppercase tracking-widest mb-1">Jami to'lovlar</p>
@@ -565,45 +800,29 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
               {topEmployee && (
                 <div className="bg-slate-950 p-4 rounded-2xl border border-amber-500/20 shadow-xl relative overflow-hidden">
                   <div className="absolute top-2 right-3 text-amber-500/10 text-6xl font-black leading-none select-none">🏆</div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Award className="text-amber-500 shrink-0" size={14}/>
-                    <p className="text-[8px] text-amber-500 font-black uppercase tracking-widest">Eng ko'p olgan xodim</p>
-                  </div>
+                  <div className="flex items-center gap-2 mb-3"><Award className="text-amber-500 shrink-0" size={14}/><p className="text-[8px] text-amber-500 font-black uppercase tracking-widest">Eng ko'p olgan xodim</p></div>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 shrink-0 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center text-amber-500 font-black text-base">
-                      {topEmployee.emp.name[0]}
-                    </div>
+                    <div className="w-10 h-10 shrink-0 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center justify-center text-amber-500 font-black text-base">{topEmployee.emp.name[0]}</div>
                     <div className="min-w-0">
                       <p className="text-white font-black text-sm truncate">{topEmployee.emp.name}</p>
                       <p className="text-amber-500 font-black text-base italic">{topEmployee.totalTaken.toLocaleString()} UZS</p>
                     </div>
                   </div>
-                  <div className="mt-3 flex gap-1 flex-wrap">
-                    {topEmployee.objNames.map((n, i) => (
-                      <span key={i} className="text-[8px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded font-bold">{n}</span>
-                    ))}
-                  </div>
+                  <div className="mt-3 flex gap-1 flex-wrap">{topEmployee.objNames.map((n, i) => <span key={i} className="text-[8px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded font-bold">{n}</span>)}</div>
                 </div>
               )}
               {topObject && topObject.total > 0 && (
                 <div className="bg-slate-950 p-4 rounded-2xl border border-purple-500/20 shadow-xl relative overflow-hidden">
                   <div className="absolute top-2 right-3 text-purple-500/10 text-6xl font-black leading-none select-none">🏗</div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Building2 className="text-purple-400 shrink-0" size={14}/>
-                    <p className="text-[8px] text-purple-400 font-black uppercase tracking-widest">Eng ko'p xarajat qilingan</p>
-                  </div>
+                  <div className="flex items-center gap-2 mb-3"><Building2 className="text-purple-400 shrink-0" size={14}/><p className="text-[8px] text-purple-400 font-black uppercase tracking-widest">Eng ko'p xarajat qilingan</p></div>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 shrink-0 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 font-black text-base">
-                      {topObject.obj.name[0]}
-                    </div>
+                    <div className="w-10 h-10 shrink-0 bg-purple-500/10 border border-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 font-black text-base">{topObject.obj.name[0]}</div>
                     <div className="min-w-0">
                       <p className="text-white font-black text-sm truncate">{topObject.obj.name}</p>
                       <p className="text-purple-400 font-black text-base italic">{topObject.total.toLocaleString()} UZS</p>
                     </div>
                   </div>
-                  <div className="mt-3">
-                    <p className="text-[8px] text-slate-500 font-bold">{topObject.empIds.length} ta xodimga berildi</p>
-                  </div>
+                  <div className="mt-3"><p className="text-[8px] text-slate-500 font-bold">{topObject.empIds.length} ta xodimga berildi</p></div>
                 </div>
               )}
             </div>
@@ -617,15 +836,12 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
               { key:'history',    icon:<Calendar size={12}/>,  label:'Tarix'      },
             ].map(({ key, icon, label }) => (
               <button key={key} onClick={() => setFinanceView(key)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-black text-[9px] uppercase transition-all whitespace-nowrap ${
-                  financeView === key ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white hover:bg-slate-900'
-                }`}>
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-black text-[9px] uppercase transition-all whitespace-nowrap ${financeView === key ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-white hover:bg-slate-900'}`}>
                 {icon} {label}
               </button>
             ))}
           </div>
 
-          {/* OY TAHLILI */}
           {financeView === 'overview' && (
             <div className="space-y-4">
               <div className="bg-slate-950 rounded-2xl border border-slate-800 p-4 shadow-xl">
@@ -634,17 +850,12 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                   {MONTH_SHORT.map((label, i) => {
                     const val        = `${selectedYear}-${String(i+1).padStart(2,'0')}`;
                     const isSelected = selectedMonth === val;
-                    const monthTotal = approvedPayroll.filter(p => p.month === val)
-                      .reduce((s,p) => s+(Number(p.calculatedSalary)||0), 0);
+                    const monthTotal = approvedPayroll.filter(p => p.month === val).reduce((s,p) => s+(Number(p.calculatedSalary)||0), 0);
                     return (
                       <button key={i} onClick={() => setSelectedMonth(val)}
-                        className={`py-2 rounded-xl text-[10px] font-black transition-all active:scale-95 relative ${
-                          isSelected ? 'bg-yellow-500 text-slate-950' : 'bg-slate-900 text-slate-500 hover:text-white border border-slate-800'
-                        }`}>
+                        className={`py-2 rounded-xl text-[10px] font-black transition-all active:scale-95 relative ${isSelected ? 'bg-yellow-500 text-slate-950' : 'bg-slate-900 text-slate-500 hover:text-white border border-slate-800'}`}>
                         {label}
-                        {monthTotal > 0 && !isSelected && (
-                          <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full"/>
-                        )}
+                        {monthTotal > 0 && !isSelected && <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full"/>}
                       </button>
                     );
                   })}
@@ -691,9 +902,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                             <div className="flex items-center gap-2 min-w-0">
                               <span className={`text-[8px] font-black w-4 shrink-0 ${i===0?'text-yellow-500':i===1?'text-slate-400':i===2?'text-amber-700':'text-slate-600'}`}>#{i+1}</span>
                               <span className="text-white font-black text-xs truncate">{name}</span>
-                              <div className="flex gap-1 flex-wrap">
-                                {[...data.objs].map((o,j) => <span key={j} className="text-[7px] text-blue-400 bg-blue-500/10 px-1 rounded font-bold">{o}</span>)}
-                              </div>
+                              <div className="flex gap-1 flex-wrap">{[...data.objs].map((o,j) => <span key={j} className="text-[7px] text-blue-400 bg-blue-500/10 px-1 rounded font-bold">{o}</span>)}</div>
                             </div>
                             <span className="text-yellow-500 font-black text-xs shrink-0 ml-2">{data.total.toLocaleString()}</span>
                           </div>
@@ -720,10 +929,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                             </div>
                           </div>
                           <div className="flex items-center gap-3 ml-3 shrink-0">
-                            <p className="text-base font-black text-emerald-500 italic">
-                              {(Number(rec.calculatedSalary)||0).toLocaleString()}
-                              <span className="text-[9px] text-slate-600 ml-1 not-italic">UZS</span>
-                            </p>
+                            <p className="text-base font-black text-emerald-500 italic">{(Number(rec.calculatedSalary)||0).toLocaleString()}<span className="text-[9px] text-slate-600 ml-1 not-italic">UZS</span></p>
                             <button onClick={() => handleRejectPayroll(id)} className="text-slate-700 hover:text-rose-500 active:scale-95 transition-colors"><Trash2 size={16}/></button>
                           </div>
                         </div>
@@ -735,7 +941,6 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
             </div>
           )}
 
-          {/* OBYEKTLAR */}
           {financeView === 'byObject' && (
             <div className="space-y-3">
               {objectStats.filter(s => s.total > 0 || s.budget > 0).length === 0
@@ -759,10 +964,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="text-right">
-                              <p className="text-white font-black text-sm italic">{total.toLocaleString()}</p>
-                              <p className="text-[8px] text-slate-600">UZS berildi</p>
-                            </div>
+                            <div className="text-right"><p className="text-white font-black text-sm italic">{total.toLocaleString()}</p><p className="text-[8px] text-slate-600">UZS berildi</p></div>
                             <ChevronDown size={14} className={`text-slate-500 transition-transform ${isExpanded?'rotate-180':''}`}/>
                           </div>
                         </div>
@@ -770,19 +972,12 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                           <>
                             <div className="grid grid-cols-3 gap-2 mb-2">
                               {[
-                                {label:'Byudjet', val:budget.toLocaleString(), cls:'text-white', bg:'bg-slate-900/60 border-slate-800'},
-                                {label:'Xarajat', val:total.toLocaleString(),  cls:'text-yellow-500', bg:'bg-slate-900/60 border-slate-800'},
-                                {label:'Qoldiq',  val:(isNegative?'−':'')+Math.abs(balance).toLocaleString(), cls:isNegative?'text-rose-500':'text-emerald-500', bg:isNegative?'bg-rose-500/10 border-rose-500/20':'bg-emerald-500/10 border-emerald-500/20'},
-                              ].map(s => (
-                                <div key={s.label} className={`p-2 rounded-xl border text-center ${s.bg}`}>
-                                  <p className="text-[7px] text-slate-500 font-black uppercase mb-0.5">{s.label}</p>
-                                  <p className={`font-black text-xs ${s.cls}`}>{s.val}</p>
-                                </div>
-                              ))}
+                                {label:'Byudjet',val:budget.toLocaleString(),cls:'text-white',bg:'bg-slate-900/60 border-slate-800'},
+                                {label:'Xarajat',val:total.toLocaleString(), cls:'text-yellow-500',bg:'bg-slate-900/60 border-slate-800'},
+                                {label:'Qoldiq', val:(isNegative?'−':'')+Math.abs(balance).toLocaleString(),cls:isNegative?'text-rose-500':'text-emerald-500',bg:isNegative?'bg-rose-500/10 border-rose-500/20':'bg-emerald-500/10 border-emerald-500/20'},
+                              ].map(s=><div key={s.label} className={`p-2 rounded-xl border text-center ${s.bg}`}><p className="text-[7px] text-slate-500 font-black uppercase mb-0.5">{s.label}</p><p className={`font-black text-xs ${s.cls}`}>{s.val}</p></div>)}
                             </div>
-                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full ${isNegative?'bg-rose-500':'bg-blue-500'}`} style={{width:`${isNegative?100:pct}%`}}/>
-                            </div>
+                            <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full ${isNegative?'bg-rose-500':'bg-blue-500'}`} style={{width:`${isNegative?100:pct}%`}}/></div>
                             <p className="text-[8px] text-slate-600 font-bold mt-1">{pct}% ishlatildi {isNegative&&'⚠ Limit oshdi'}</p>
                           </>
                         )}
@@ -804,9 +999,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                                     <span className="text-emerald-500 font-black text-xs">{amount.toLocaleString()} UZS</span>
                                   </div>
                                 </div>
-                                <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                                  <div className="h-full bg-emerald-500 rounded-full" style={{width:`${ep}%`}}/>
-                                </div>
+                                <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{width:`${ep}%`}}/></div>
                               </div>
                             );
                           })}
@@ -815,10 +1008,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                             <div className="space-y-1 max-h-[200px] overflow-y-auto">
                               {[...payments].reverse().slice(0,10).map(p => (
                                 <div key={p._id||p.id} className="flex justify-between items-center py-1.5 px-2 rounded-lg hover:bg-slate-900/30">
-                                  <div className="min-w-0">
-                                    <p className="text-white font-black text-xs truncate">{p.employeeName}</p>
-                                    <p className="text-slate-600 text-[8px] font-bold">{p.date}</p>
-                                  </div>
+                                  <div className="min-w-0"><p className="text-white font-black text-xs truncate">{p.employeeName}</p><p className="text-slate-600 text-[8px] font-bold">{p.date}</p></div>
                                   <p className="text-yellow-500 font-black text-xs shrink-0 ml-2">{(Number(p.calculatedSalary)||0).toLocaleString()} UZS</p>
                                 </div>
                               ))}
@@ -833,20 +1023,17 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
             </div>
           )}
 
-          {/* XODIMLAR */}
+          {/* XODIMLAR — bosib detal modal ochiladi */}
           {financeView === 'byEmployee' && (
             <div className="space-y-3">
               {employeeStats.length === 0
                 ? <Empty text="Faol xodimlar yo'q"/>
-                : employeeStats.map(({ emp, empId, totalTaken, totalEarned, remaining, workedDays, objNames, payments }, idx) => {
+                : employeeStats.map((stats, idx) => {
+                  const { emp, empId, totalTaken, totalEarned, remaining, workedDays, objNames } = stats;
                   const earnedPct = totalEarned > 0 ? Math.min(Math.round((totalTaken/totalEarned)*100),100) : 0;
-                  const objBreakdown = (() => {
-                    const map = {};
-                    payments.forEach(p => { const n=p.objectName||'Belgilanmagan'; if(!map[n])map[n]=0; map[n]+=Number(p.calculatedSalary)||0; });
-                    return Object.entries(map).sort(([,a],[,b]) => b-a);
-                  })();
                   return (
-                    <div key={empId} className="bg-slate-950 p-4 rounded-2xl border border-slate-800 shadow-lg">
+                    <button key={empId} onClick={() => setDetailEmpStats(stats)}
+                      className="w-full bg-slate-950 p-4 rounded-2xl border border-slate-800 shadow-lg text-left hover:border-blue-500/30 hover:bg-slate-900/20 active:scale-[0.99] transition-all group">
                       <div className="flex items-center gap-3 mb-3">
                         <div className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center font-black text-base border ${idx===0?'bg-amber-500/10 border-amber-500/20 text-amber-500':idx===1?'bg-slate-400/10 border-slate-400/20 text-slate-400':'bg-yellow-500/10 border-yellow-500/20 text-yellow-500'}`}>{emp.name[0]}</div>
                         <div className="min-w-0 flex-1">
@@ -856,9 +1043,12 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                           </div>
                           <p className="text-slate-500 text-[9px] font-bold uppercase">{emp.position} • {workedDays} kun</p>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-yellow-500 font-black text-base italic leading-tight">{totalTaken.toLocaleString()}</p>
-                          <p className="text-[8px] text-slate-600">UZS oldi</p>
+                        <div className="flex items-center gap-2">
+                          <div className="text-right shrink-0">
+                            <p className="text-yellow-500 font-black text-base italic leading-tight">{totalTaken.toLocaleString()}</p>
+                            <p className="text-[8px] text-slate-600">UZS oldi</p>
+                          </div>
+                          <ChevronRight size={14} className="text-slate-600 group-hover:text-blue-400 transition-colors shrink-0"/>
                         </div>
                       </div>
                       <div className="mb-3 space-y-1">
@@ -874,31 +1064,18 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                           <span>Jami: {totalEarned.toLocaleString()} UZS</span>
                         </div>
                       </div>
-                      {objBreakdown.length > 0 && (
-                        <div className="space-y-1.5">
-                          <p className="text-[8px] text-slate-500 font-black uppercase tracking-wide">Obyektlar bo'yicha:</p>
-                          {objBreakdown.map(([objName, amount]) => {
-                            const p2 = totalTaken > 0 ? Math.round((amount/totalTaken)*100) : 0;
-                            return (
-                              <div key={objName} className="flex items-center gap-2">
-                                <span className="text-[8px] text-blue-400 font-black bg-blue-500/10 px-1.5 py-0.5 rounded shrink-0 w-28 truncate">{objName}</span>
-                                <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                  <div className="h-full bg-blue-500 rounded-full" style={{width:`${p2}%`}}/>
-                                </div>
-                                <span className="text-[8px] text-white font-black shrink-0">{amount.toLocaleString()}</span>
-                              </div>
-                            );
-                          })}
+                      {objNames.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          {objNames.map((n, i) => <span key={i} className="text-[7px] text-blue-400 font-black bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">{n}</span>)}
                         </div>
                       )}
-                    </div>
+                    </button>
                   );
                 })
               }
             </div>
           )}
 
-          {/* TARIX */}
           {financeView === 'history' && (
             <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
               <div className="p-4 border-b border-slate-800 bg-slate-900/30 space-y-3">
@@ -919,23 +1096,27 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                 </select>
               </div>
               {selectedEmpStats && (
-                <div className="px-4 py-3 bg-blue-500/5 border-b border-slate-800">
+                <button onClick={() => setDetailEmpStats(selectedEmpStats)}
+                  className="w-full px-4 py-3 bg-blue-500/5 border-b border-slate-800 hover:bg-blue-500/10 active:scale-[0.99] transition-all text-left">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 shrink-0 bg-yellow-500/10 border border-yellow-500/20 rounded-xl flex items-center justify-center text-yellow-500 font-black text-base">{selectedEmpStats.emp?.name?.[0]||'?'}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white font-black uppercase text-sm">{selectedEmpStats.emp?.name}</p>
                       <p className="text-slate-500 text-[9px] font-bold uppercase">{selectedEmpStats.emp?.position}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-yellow-500 font-black text-base italic">{selectedEmpStats.totalTaken.toLocaleString()}</p>
-                      <p className="text-[8px] text-slate-500">UZS jami</p>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <p className="text-yellow-500 font-black text-base italic">{selectedEmpStats.totalTaken.toLocaleString()}</p>
+                        <p className="text-[8px] text-slate-500">UZS jami</p>
+                      </div>
+                      <ChevronRight size={14} className="text-blue-400 shrink-0"/>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      {label:"To'lovlar",   val:`${selectedEmpStats.payments.length} ta`,           color:'text-white'},
-                      {label:"Hisoblangan", val:selectedEmpStats.totalEarned.toLocaleString(),       color:'text-emerald-500'},
-                      {label:"Qoldiq",      val:selectedEmpStats.remaining.toLocaleString(),         color:selectedEmpStats.remaining>=0?'text-yellow-500':'text-rose-500'},
+                      {label:"To'lovlar",   val:`${selectedEmpStats.payments.length} ta`,     color:'text-white'},
+                      {label:"Hisoblangan", val:selectedEmpStats.totalEarned.toLocaleString(), color:'text-emerald-500'},
+                      {label:"Qoldiq",      val:selectedEmpStats.remaining.toLocaleString(),   color:selectedEmpStats.remaining>=0?'text-yellow-500':'text-rose-500'},
                     ].map(s => (
                       <div key={s.label} className="bg-slate-900/60 px-3 py-2 rounded-xl border border-slate-800 text-center">
                         <p className="text-[7px] text-slate-500 font-black uppercase mb-0.5">{s.label}</p>
@@ -943,7 +1124,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                       </div>
                     ))}
                   </div>
-                </div>
+                </button>
               )}
               <div className="p-3 space-y-2 max-h-[600px] overflow-y-auto">
                 {filteredHistoryByDate.length === 0
@@ -956,9 +1137,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                         <button onClick={() => setExpandedMonth(isExpanded?null:date)}
                           className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-900/50 hover:bg-slate-900 active:bg-slate-800 transition-colors">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-center">
-                              <Calendar className="text-blue-500" size={14}/>
-                            </div>
+                            <div className="w-8 h-8 shrink-0 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-center"><Calendar className="text-blue-500" size={14}/></div>
                             <div className="text-left">
                               <p className="text-white font-black text-sm">{date}</p>
                               <p className="text-slate-500 text-[9px] font-bold uppercase">{records.length} ta to'lov</p>
@@ -1004,9 +1183,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
         </div>
       )}
 
-      {/* ══════════════════════════════════════
-          OYLIK BERISH MODALI
-      ══════════════════════════════════════ */}
+      {/* OYLIK BERISH MODALI */}
       {showSalaryModal && salaryEmp && (
         <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center backdrop-blur-md bg-slate-950/80">
           <div className="bg-slate-900 border border-yellow-500/20 rounded-t-[2rem] sm:rounded-[2rem] w-full sm:max-w-md p-6 shadow-2xl max-h-[95vh] overflow-y-auto">
@@ -1015,26 +1192,15 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                 <h3 className="text-xl font-black text-white italic">💵 Oylik Berish</h3>
                 <p className="text-slate-500 text-[9px] font-black uppercase mt-0.5">{salaryEmp.name}</p>
               </div>
-              <button onClick={closeSalaryModal} className="w-9 h-9 bg-slate-800 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-colors">
-                <X className="text-slate-400" size={16}/>
-              </button>
+              <button onClick={closeSalaryModal} className="w-9 h-9 bg-slate-800 hover:bg-slate-700 rounded-xl flex items-center justify-center transition-colors"><X className="text-slate-400" size={16}/></button>
             </div>
             {(() => {
               const bal = getEmpBalance(salaryEmp);
               return (
                 <div className="bg-slate-950 rounded-2xl p-4 mb-4 border border-slate-800 space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 text-[9px] font-black uppercase">Ish kunlari</span>
-                    <span className="text-white font-black text-sm">{bal.workedDays} kun</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500 text-[9px] font-black uppercase">Hisoblangan</span>
-                    <span className="text-emerald-500 font-black text-sm">{bal.totalEarned.toLocaleString()} UZS</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-slate-800">
-                    <span className="text-slate-500 text-[9px] font-black uppercase">Qoldiq balans</span>
-                    <span className={`font-black text-base italic ${bal.remaining>=0?'text-yellow-500':'text-rose-500'}`}>{bal.remaining.toLocaleString()} UZS</span>
-                  </div>
+                  <div className="flex justify-between"><span className="text-slate-500 text-[9px] font-black uppercase">Ish kunlari</span><span className="text-white font-black text-sm">{bal.workedDays} kun</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500 text-[9px] font-black uppercase">Hisoblangan</span><span className="text-emerald-500 font-black text-sm">{bal.totalEarned.toLocaleString()} UZS</span></div>
+                  <div className="flex justify-between pt-2 border-t border-slate-800"><span className="text-slate-500 text-[9px] font-black uppercase">Qoldiq balans</span><span className={`font-black text-base italic ${bal.remaining>=0?'text-yellow-500':'text-rose-500'}`}>{bal.remaining.toLocaleString()} UZS</span></div>
                 </div>
               );
             })()}
@@ -1065,10 +1231,7 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                           ].map(s=><div key={s.label} className={`p-2 rounded-xl border text-center ${s.bg}`}><p className="text-[7px] text-slate-500 font-black uppercase mb-0.5">{s.label}</p><p className={`font-black text-xs ${s.cls}`}>{s.val}</p></div>)}
                         </div>
                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden"><div className={`h-full rounded-full ${isNeg?'bg-rose-500':'bg-emerald-500'}`} style={{width:`${isNeg?100:pct}%`}}/></div>
-                        <div className="flex justify-between">
-                          <span className="text-[8px] text-slate-600 font-bold">{pct}% ishlatildi</span>
-                          {isNeg&&<span className="text-[8px] text-rose-500 font-black">⚠ Limit oshdi</span>}
-                        </div>
+                        <div className="flex justify-between"><span className="text-[8px] text-slate-600 font-bold">{pct}% ishlatildi</span>{isNeg&&<span className="text-[8px] text-rose-500 font-black">⚠ Limit oshdi</span>}</div>
                       </>
                     ) : <p className="text-slate-600 text-[9px] font-black uppercase text-center py-1">Jami xarajat: <span className="text-yellow-500">{spent.toLocaleString()} UZS</span></p>}
                   </div>
@@ -1105,11 +1268,15 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
           </div>
         </div>
       )}
+
+      {/* ISHCHI DETAL MODALI */}
+      {detailEmpStats && (
+        <EmployeeDetailModal empStats={detailEmpStats} onClose={() => setDetailEmpStats(null)}/>
+      )}
     </div>
   );
 };
 
-/* ── Yordamchi komponentlar ── */
 const TabBtn = ({ active, onClick, icon, label, badge, accent }) => (
   <button onClick={onClick}
     className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-3 rounded-xl font-black text-[9px] uppercase transition-all whitespace-nowrap ${
@@ -1122,17 +1289,13 @@ const TabBtn = ({ active, onClick, icon, label, badge, accent }) => (
     {icon}
     <span>{label}</span>
     {badge > 0 && (
-      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${active?'bg-white/20 text-white':'bg-yellow-500/20 text-yellow-500'}`}>
-        {badge}
-      </span>
+      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${active?'bg-white/20 text-white':'bg-yellow-500/20 text-yellow-500'}`}>{badge}</span>
     )}
   </button>
 );
 
 const Empty = ({ text }) => (
-  <div className="bg-slate-950 rounded-2xl border border-slate-800 p-12 text-center text-slate-700 font-black uppercase text-xs">
-    {text}
-  </div>
+  <div className="bg-slate-950 rounded-2xl border border-slate-800 p-12 text-center text-slate-700 font-black uppercase text-xs">{text}</div>
 );
 
 export default Payroll;
