@@ -627,8 +627,8 @@ const Payroll = ({ employees, attendance, payroll, objects = [], onLog, onRefres
                     className="bg-slate-900/60 p-2.5 rounded-xl border border-blue-500/30 text-center hover:bg-blue-500/10 hover:border-blue-500/50 active:scale-95 transition-all group relative"
                   >
                     <p className="text-[8px] text-blue-400 font-black uppercase mb-0.5">To'liq ma'lumot</p>
-                    <p className="font-black text-sm leading-tight text-blue-400">{bal.totalTaken.toLocaleString()}</p>
-                    <p className="text-[8px] text-slate-600">UZS olingan</p>
+                    {/* <p className="font-black text-sm leading-tight text-blue-400">{bal.totalTaken.toLocaleString()}</p> */}
+                    {/* <p className="text-[8px] text-slate-600">UZS olingan</p> */}
                     <ChevronRight size={10} className="absolute top-1 right-1 text-blue-500/50 group-hover:text-blue-400 transition-colors"/>
                   </button>
                   <div className={`bg-slate-900/60 p-2.5 rounded-xl border text-center ${bal.remaining >= 0 ? 'border-slate-800' : 'border-rose-500/20'}`}>
