@@ -1,8 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, CreditCard,
-  LogOut, Menu, X, Zap, Building2, ShieldCheck,
+  LayoutDashboard,
+  Users,
+  CreditCard,
+  LogOut,
+  Menu,
+  X,
+  Zap,
+  Building2,
+  ShieldCheck,
+  BarChart3   // 👈 Hisobotlar uchun qo‘shildi
 } from 'lucide-react';
 
 import { api } from './utils/api';
@@ -173,6 +181,8 @@ const App = () => {
                         {isSuperAdmin && (
                           <NavItem to="/objects"  icon={<Building2 size={20}/>}       label="Obyektlar" />
                         )}
+                         <NavItem to="/excel"    icon={<BarChart3 size={20}/>}      label="Hisobotlar" />
+                   
                       </>
                     )}
                   </nav>
